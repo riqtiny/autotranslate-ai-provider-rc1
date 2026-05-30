@@ -158,8 +158,13 @@ class ModelManager:
         # Render to a string first (tokenize=False), then encode. Doing this
         # avoids version differences where tokenize=True returns a dict
         # ({"input_ids": ...}) instead of a flat id list.
+        kwargs = {}
+        if lm.spec.family == "qwen":
+            # Qwen3 enables a "thinking mode" by default; disable it so the model
+            # answers directly (e.g. for translation) instead of reasoning.
+            kwargs["enable_thinking"] = False
         prompt = tok.apply_chat_template(
-            messages, add_generation_prompt=True, tokenize=False
+            messages, add_generation_prompt=True, tokenize=False, **kwargs
         )
         ids = tok.encode(prompt, add_special_tokens=False)
         return tok.convert_ids_to_tokens(ids)

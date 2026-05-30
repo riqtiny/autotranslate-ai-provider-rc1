@@ -77,6 +77,10 @@ The `family` field controls EOS tokens (`qwen` → `<|im_end|>`, `gemma`/
 `translategemma` → `<end_of_turn>`); any other value falls back to the
 tokenizer's own EOS. Prompt formatting always uses the model's HF chat template.
 
+For the `qwen` family, Qwen3's default "thinking mode" is disabled
+(`enable_thinking=False`) so the model answers directly instead of emitting
+`<think>...</think>` reasoning — better suited to translation/chat use.
+
 ## Gated models (Gemma, Llama)
 
 Gemma and Llama require accepting a license on HuggingFace. Set `HF_TOKEN` in
