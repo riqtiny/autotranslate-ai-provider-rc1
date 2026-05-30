@@ -1,0 +1,14 @@
+# Core inference engine
+ctranslate2>=4.5.0
+
+# HF model loading, tokenizers and conversion
+transformers>=4.51.0
+torch
+sentencepiece
+accelerate
+huggingface_hub
+
+# API
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
