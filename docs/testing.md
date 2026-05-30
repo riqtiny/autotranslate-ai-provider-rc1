@@ -42,7 +42,9 @@ pytest tests/ -v
 - `POST /v1/chat/completions` returns a `chat.completion` with non-empty content
   and consistent `usage` totals
 - streaming (`"stream": true`) yields `text/event-stream` chunks with content
-  deltas and terminates with `[DONE]`
+  deltas and terminates with `[DONE]`. Because a stream returns HTTP `200` before
+  generation starts, a "model not loadable" error arrives as an in-band
+  `data: {"error": ...}` event — the test detects this and skips.
 
 ## Graceful skipping
 

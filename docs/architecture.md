@@ -39,8 +39,10 @@ Holds **at most one model in memory** (Colab-friendly). Responsibilities:
   runs GC, and calls `torch.cuda.empty_cache()` to actually free VRAM.
 - **Auto-convert:** loading an unconverted-but-supported model converts it first.
 - **VRAM:** `vram_stats()` reports total/used/free MiB via `torch.cuda.mem_get_info`.
-- **Prompts:** uses each model's HF chat template (`apply_chat_template`) so prompt
-  formatting always matches the model.
+- **Prompts:** renders each model's HF chat template to a string
+  (`apply_chat_template(tokenize=False)`) then encodes it, so prompt formatting
+  always matches the model and stays robust across transformers versions (some
+  return a dict from `tokenize=True`).
 - **Inference:** `generate()` (batch) and `stream()` (token-by-token via
   `generate_tokens`, decoded incrementally into text deltas).
 

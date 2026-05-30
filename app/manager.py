@@ -155,10 +155,14 @@ class ModelManager:
     # --- prompt building -----------------------------------------------------
     def build_tokens(self, lm: LoadedModel, messages: list[dict]) -> list[str]:
         tok = lm.tokenizer
-        input_ids = tok.apply_chat_template(
-            messages, add_generation_prompt=True, tokenize=True
+        # Render to a string first (tokenize=False), then encode. Doing this
+        # avoids version differences where tokenize=True returns a dict
+        # ({"input_ids": ...}) instead of a flat id list.
+        prompt = tok.apply_chat_template(
+            messages, add_generation_prompt=True, tokenize=False
         )
-        return tok.convert_ids_to_tokens(input_ids)
+        ids = tok.encode(prompt, add_special_tokens=False)
+        return tok.convert_ids_to_tokens(ids)
 
     # --- inference -----------------------------------------------------------
     def generate(self, messages: list[dict], *, model: str | None = None,

@@ -54,6 +54,18 @@ data: {"id":"...","object":"chat.completion.chunk","choices":[{"delta":{},"finis
 data: [DONE]
 ```
 
+**Streaming errors are in-band.** For a streamed request the HTTP status is `200`
+and headers are sent *before* generation starts, so an error that occurs while
+streaming (e.g. the model isn't converted/loadable) can't change the status code.
+Instead it's emitted as a `data:` event and the stream then closes:
+
+```
+data: {"error":{"message":"Model 'qwen3-4b' is not converted yet. ...","type":"invalid_request_error"}}
+```
+
+Non-streaming requests return these same errors as an HTTP `400` (see [Errors](#errors)).
+Clients consuming the raw stream should check each event for an `"error"` key.
+
 ### Using the official OpenAI client
 
 ```python
