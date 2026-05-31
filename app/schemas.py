@@ -26,6 +26,9 @@ class ChatCompletionRequest(BaseModel):
     top_k: int = 0
     frequency_penalty: float = 0.0  # mapped onto repetition_penalty
     stream: bool = False
+    # Required only by translation models like translategemma (e.g. "en", "fr").
+    source_lang: str | None = None
+    target_lang: str | None = None
 
     model_config = {"extra": "ignore"}
 

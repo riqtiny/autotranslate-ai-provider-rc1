@@ -85,13 +85,30 @@ def test_auth_rejected_without_key(reachable):
 
 
 # --- inference (needs a usable model) ---------------------------------------
+def _infer_payload(model: str, **overrides) -> dict:
+    """Build a request; translation models need lang codes + a translate prompt."""
+    if "translategemma" in model:
+        body = {
+            "model": model,
+            "messages": [{"role": "user", "content": "Hello, how are you?"}],
+            "source_lang": "en",
+            "target_lang": "fr",
+            "max_tokens": 32,
+            "temperature": 0.0,
+        }
+    else:
+        body = {
+            "model": model,
+            "messages": [{"role": "user", "content": "Reply with the single word: pong"}],
+            "max_tokens": 16,
+            "temperature": 0.0,
+        }
+    body.update(overrides)
+    return body
+
+
 def test_chat_completion(model):
-    r = _post("/v1/chat/completions", json={
-        "model": model,
-        "messages": [{"role": "user", "content": "Reply with the single word: pong"}],
-        "max_tokens": 16,
-        "temperature": 0.0,
-    })
+    r = _post("/v1/chat/completions", json=_infer_payload(model))
     if r.status_code == 400:
         pytest.skip(f"model '{model}' not converted/loadable: {r.text}")
     assert r.status_code == 200
@@ -105,13 +122,8 @@ def test_chat_completion(model):
 
 
 def test_chat_completion_stream(model):
-    r = _post("/v1/chat/completions", json={
-        "model": model,
-        "messages": [{"role": "user", "content": "Count: 1 2 3"}],
-        "max_tokens": 16,
-        "temperature": 0.0,
-        "stream": True,
-    }, stream=True)
+    r = _post("/v1/chat/completions",
+              json=_infer_payload(model, stream=True), stream=True)
     if r.status_code == 400:
         pytest.skip(f"model '{model}' not converted/loadable: {r.text}")
     assert r.status_code == 200

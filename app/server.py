@@ -64,6 +64,8 @@ def chat_completions(req: ChatCompletionRequest, _: None = Depends(require_key))
         top_p=req.top_p,
         top_k=req.top_k,
         repetition_penalty=req.repetition_penalty(),
+        source_lang=req.source_lang,
+        target_lang=req.target_lang,
     )
     try:
         if req.stream:
@@ -98,7 +100,7 @@ def _stream_chunks(req, messages, kwargs):
     try:
         for delta in manager.stream(messages, **kwargs):
             yield chunk(ChatChunkChoice(delta=DeltaMessage(content=delta)))
-    except (KeyError, ValueError) as e:
+    except Exception as e:  # never crash the stream; report in-band then close
         err = {"error": {"message": str(e), "type": "invalid_request_error"}}
         yield f"data: {json.dumps(err)}\n\n"
     yield chunk(ChatChunkChoice(delta=DeltaMessage(), finish_reason="stop"))

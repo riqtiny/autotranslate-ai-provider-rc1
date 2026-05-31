@@ -28,9 +28,10 @@ won't fit a Colab T4 anyway.
 ### 3. `google/translategemma-4b-it` — ⚠️ works text-only
 TranslateGemma is **Gemma-3-based** and multimodal (it can translate text in
 images). CTranslate2 supports "Gemma 3 (text only)", so the text translation path
-can be converted. Image input is dropped. This model uses a special chat template
-with `source_lang_code` / `target_lang_code` fields — see the API doc for how to
-call it.
+can be converted. Image input is dropped. Its chat template is translation-only
+and **requires language codes**: call it with `source_lang` and `target_lang`
+fields (the server maps them into the model's structured `source_lang_code` /
+`target_lang_code` template). See [api.md](api.md#calling-translategemma-translation-models).
 
 **Shipped as:** registry key `translategemma-4b-it`.
 

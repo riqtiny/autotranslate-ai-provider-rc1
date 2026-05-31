@@ -153,29 +153,63 @@ class ModelManager:
         return self._current
 
     # --- prompt building -----------------------------------------------------
-    def build_tokens(self, lm: LoadedModel, messages: list[dict]) -> list[str]:
+    def build_tokens(self, lm: LoadedModel, messages: list[dict], *,
+                     source_lang: str | None = None,
+                     target_lang: str | None = None) -> list[str]:
         tok = lm.tokenizer
-        # Render to a string first (tokenize=False), then encode. Doing this
-        # avoids version differences where tokenize=True returns a dict
-        # ({"input_ids": ...}) instead of a flat id list.
         kwargs = {}
-        if lm.spec.family == "qwen":
+        if lm.spec.family == "translategemma":
+            # TranslateGemma's template requires structured content with language
+            # codes, not a plain string. Build it from the last user message.
+            messages = self._translategemma_messages(messages, source_lang, target_lang)
+        elif lm.spec.family == "qwen":
             # Qwen3 enables a "thinking mode" by default; disable it so the model
             # answers directly (e.g. for translation) instead of reasoning.
             kwargs["enable_thinking"] = False
-        prompt = tok.apply_chat_template(
-            messages, add_generation_prompt=True, tokenize=False, **kwargs
-        )
+        # Render to a string first (tokenize=False), then encode. Doing this
+        # avoids version differences where tokenize=True returns a dict
+        # ({"input_ids": ...}) instead of a flat id list.
+        try:
+            prompt = tok.apply_chat_template(
+                messages, add_generation_prompt=True, tokenize=False, **kwargs
+            )
+        except Exception as e:  # surface template errors as clean 400s
+            raise ValueError(f"chat template error: {e}")
         ids = tok.encode(prompt, add_special_tokens=False)
         return tok.convert_ids_to_tokens(ids)
+
+    @staticmethod
+    def _translategemma_messages(messages, source_lang, target_lang):
+        if not source_lang or not target_lang:
+            raise ValueError(
+                "translategemma requires 'source_lang' and 'target_lang' "
+                "(e.g. 'en', 'fr', 'de-DE') in the request."
+            )
+        text = next(
+            (m["content"] for m in reversed(messages) if m["role"] == "user"), None
+        )
+        if not text:
+            raise ValueError("no user message to translate.")
+        return [{
+            "role": "user",
+            "content": [{
+                "type": "text",
+                "source_lang_code": source_lang,
+                "target_lang_code": target_lang,
+                "text": text,
+            }],
+        }]
 
     # --- inference -----------------------------------------------------------
     def generate(self, messages: list[dict], *, model: str | None = None,
                  max_tokens: int = 512, temperature: float = 0.7,
                  top_p: float = 1.0, top_k: int = 0,
-                 repetition_penalty: float = 1.0) -> dict:
+                 repetition_penalty: float = 1.0,
+                 source_lang: str | None = None,
+                 target_lang: str | None = None) -> dict:
         lm = self._require(model)
-        tokens = self.build_tokens(lm, messages)
+        tokens = self.build_tokens(lm, messages, source_lang=source_lang,
+                                   target_lang=target_lang)
         results = lm.generator.generate_batch(
             [tokens],
             max_length=max_tokens,
@@ -198,9 +232,12 @@ class ModelManager:
     def stream(self, messages: list[dict], *, model: str | None = None,
                max_tokens: int = 512, temperature: float = 0.7,
                top_p: float = 1.0, top_k: int = 0,
-               repetition_penalty: float = 1.0) -> Iterator[str]:
+               repetition_penalty: float = 1.0,
+               source_lang: str | None = None,
+               target_lang: str | None = None) -> Iterator[str]:
         lm = self._require(model)
-        tokens = self.build_tokens(lm, messages)
+        tokens = self.build_tokens(lm, messages, source_lang=source_lang,
+                                   target_lang=target_lang)
         step_results = lm.generator.generate_tokens(
             tokens,
             max_length=max_tokens,

@@ -27,6 +27,8 @@ Request fields (OpenAI-compatible; unknown fields ignored):
 | `top_k` | 0 | extra (0 = disabled) |
 | `frequency_penalty` | 0.0 | mapped → CT2 `repetition_penalty` |
 | `stream` | false | SSE streaming when true |
+| `source_lang` | — | extra; **required** by translation models (e.g. `en`) |
+| `target_lang` | — | extra; **required** by translation models (e.g. `fr`) |
 
 **Non-streaming:**
 
@@ -79,21 +81,27 @@ resp = client.chat.completions.create(
 print(resp.choices[0].message.content)
 ```
 
-### Calling TranslateGemma
+### Calling TranslateGemma (translation models)
 
-TranslateGemma expects source/target language codes. With this server you embed
-the instruction in the message content (the HF chat template handles formatting):
+TranslateGemma's chat template is translation-only and **requires language
+codes** — it rejects plain chat. Pass `source_lang` and `target_lang` (extra
+fields beyond the OpenAI spec); the text to translate is the last user message:
 
 ```bash
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model":"translategemma-4b-it","messages":[{"role":"user","content":"Translate from en to fr: The house is wonderful."}]}'
+  -d '{
+        "model": "translategemma-4b-it",
+        "messages": [{"role": "user", "content": "The house is wonderful."}],
+        "source_lang": "en",
+        "target_lang": "fr"
+      }'
 ```
 
-> TranslateGemma's native template uses structured `source_lang_code` /
-> `target_lang_code` fields and is translation-only. This server exposes the
-> general chat surface; for strict native formatting, convert and call the model
-> directly (see [models.md](models.md)).
+Language codes are ISO 639-1 (`en`, `fr`, `de`) or regionalized
+(`en-US`, `de-DE`). If `source_lang`/`target_lang` are missing for a translation
+model, the request returns HTTP `400`. These fields are ignored by non-translation
+models (e.g. `qwen3-4b`, `gemma3-4b-it`), which take normal chat messages.
 
 ## Admin endpoints
 
