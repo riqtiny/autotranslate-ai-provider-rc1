@@ -21,6 +21,13 @@ export CT2_TEST_BASE_URL=http://localhost:8000   # or https://<id>.trycloudflare
 pytest tests/ -v
 ```
 
+Add `-s` to see `print(...)` output (useful for the verbose translation test and
+for reading full error bodies that pytest would otherwise truncate):
+
+```bash
+pytest tests/ -v -s
+```
+
 ## Configuration (env vars)
 
 | Var | Default | Purpose |
@@ -45,6 +52,19 @@ pytest tests/ -v
   deltas and terminates with `[DONE]`. Because a stream returns HTTP `200` before
   generation starts, a "model not loadable" error arrives as an in-band
   `data: {"error": ...}` event — the test detects this and skips.
+
+**Translation** (`test_translate_random_to_indonesian`, translation models only):
+- picks a random source language (en/fr/es/de/ja) and translates a sample
+  sentence **into Indonesian** using `source_lang`/`target_lang`
+- skips with `CT2_TEST_MODEL` set to a non-translation model
+- it's **verbose**: it prints the source text, request, status, the translation
+  and token usage, and the **full error body** on failure (pytest truncates skip
+  reasons, so this is the way to see why a model won't load). Use `-s` to view:
+
+```bash
+CT2_TEST_MODEL=translategemma-4b-it pytest \
+  tests/test_api.py::test_translate_random_to_indonesian -v -s
+```
 
 ## Graceful skipping
 

@@ -132,6 +132,10 @@ Colab) or your tunnel URL (from your laptop):
 ```python
 !pip install -q -r requirements-dev.txt
 !CT2_TEST_BASE_URL=http://localhost:8000 CT2_TEST_MODEL=qwen3-4b pytest tests/ -v
+
+# Verbose translation test (random language -> Indonesian); -s shows the output
+!CT2_TEST_BASE_URL=http://localhost:8000 CT2_TEST_MODEL=translategemma-4b-it \
+    pytest tests/test_api.py::test_translate_random_to_indonesian -v -s
 ```
 
 See [testing.md](testing.md) for full details.

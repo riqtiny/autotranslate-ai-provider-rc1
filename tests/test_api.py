@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 
 import pytest
 import requests
@@ -145,3 +146,48 @@ def test_chat_completion_stream(model):
         if delta.get("content"):
             got_content = True
     assert chunks > 0 and saw_done and got_content
+
+
+# --- translation: random language -> Indonesian (verbose) -------------------
+# Run with `pytest tests/ -v -s` to see the printed steps.
+_SAMPLES = {
+    "en": "The weather is beautiful today.",
+    "fr": "Le chat dort sur le canapé.",
+    "es": "Me gusta mucho la comida picante.",
+    "de": "Ich lerne seit zwei Jahren programmieren.",
+    "ja": "今日は友達と映画を見に行きます。",
+}
+
+
+def test_translate_random_to_indonesian(model):
+    if "translategemma" not in model:
+        pytest.skip(f"'{model}' is not a translation model; set CT2_TEST_MODEL=translategemma-4b-it")
+
+    src, text = random.choice(list(_SAMPLES.items()))
+    print(f"\n[translate] {src} -> id")
+    print(f"[translate] source: {text}")
+
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": text}],
+        "source_lang": src,
+        "target_lang": "id",
+        "max_tokens": 64,
+        "temperature": 0.0,
+    }
+    print(f"[translate] POST /v1/chat/completions  {json.dumps(payload, ensure_ascii=False)}")
+
+    r = _post("/v1/chat/completions", json=payload)
+    print(f"[translate] status: {r.status_code}")
+    if r.status_code != 200:
+        # print the FULL error (pytest's skip reason truncates it)
+        print(f"[translate] error body: {r.text}")
+        pytest.skip(f"model '{model}' not converted/loadable (see body above)")
+
+    body = r.json()
+    translation = body["choices"][0]["message"]["content"]
+    print(f"[translate] indonesian: {translation}")
+    print(f"[translate] usage: {body['usage']}")
+
+    assert translation.strip(), "empty translation"
+    assert body["model"] == model
