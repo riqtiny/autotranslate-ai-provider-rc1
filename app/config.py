@@ -4,11 +4,12 @@ The registry is the single place that knows about models. Add an entry here
 (or via CT2_EXTRA_MODELS json) and the converter, manager and API pick it up
 automatically. Nothing else in the codebase hardcodes a model name.
 """
+
 from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 try:  # load .env if python-dotenv is present, but don't require it
@@ -39,12 +40,12 @@ class ModelSpec:
     chat template via the HF tokenizer.
     """
 
-    key: str                      # registry id used by the API ("model" field)
-    hf_id: str                    # HuggingFace repo to convert from
-    family: str                   # prompt/eos behavior selector
-    task: str = "generate"        # "generate" (decoder) or "translate" (enc-dec)
-    supported: bool = True        # known to work with current CTranslate2
-    note: str = ""                # human-facing compatibility note
+    key: str  # registry id used by the API ("model" field)
+    hf_id: str  # HuggingFace repo to convert from
+    family: str  # prompt/eos behavior selector
+    task: str = "generate"  # "generate" (decoder) or "translate" (enc-dec)
+    supported: bool = True  # known to work with current CTranslate2
+    note: str = ""  # human-facing compatibility note
     extra_convert_args: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict:
@@ -56,37 +57,17 @@ class ModelSpec:
 # are listed. Unsupported entries are kept so the API can report *why* and so
 # they're trivial to enable if CTranslate2 adds support later.
 _DEFAULT_MODELS: list[ModelSpec] = [
-    # Intended: Qwen/Qwen3.5-4B (NOT supported by CT2 4.7). Substitute: Qwen3-4B.
     ModelSpec(
         key="qwen3-4b",
         hf_id="Qwen/Qwen3-4B",
         family="qwen",
-        note="CTranslate2-supported substitute for the requested Qwen3.5-4B "
-        "(Qwen3.5 is multimodal and not supported by CTranslate2).",
+        note="CTranslate2-supported model Qwen3-4B",
     ),
-    ModelSpec(
-        key="qwen3.5-4b",
-        hf_id="Qwen/Qwen3.5-4B",
-        family="qwen",
-        supported=False,
-        note="Requested model. CTranslate2 4.7 supports Qwen 2.5 / Qwen 3 only. "
-        "Use 'qwen3-4b' instead.",
-    ),
-    # Intended: google/gemma-4-E4B-it (MoE, NOT supported). Substitute: gemma-3-4b-it.
     ModelSpec(
         key="gemma3-4b-it",
         hf_id="google/gemma-3-4b-it",
         family="gemma",
-        note="CTranslate2-supported (text-only) substitute for the requested "
-        "gemma-4-E4B-it MoE model.",
-    ),
-    ModelSpec(
-        key="gemma4-e4b-it",
-        hf_id="google/gemma-4-E4B-it",
-        family="gemma",
-        supported=False,
-        note="Requested model. CTranslate2 only supports the gemma-4 31B dense "
-        "model; the E2B/E4B MoE variants are not supported.",
+        note="CTranslate2-supported (text-only) substitute for the requested ",
     ),
     # Requested translation model. Gemma-3 based, multimodal; text-only path may
     # work with CTranslate2's Gemma 3 support. Marked supported but flagged.
@@ -96,6 +77,23 @@ _DEFAULT_MODELS: list[ModelSpec] = [
         family="translategemma",
         note="Gemma-3-based translation model. Text-only conversion via "
         "CTranslate2's Gemma 3 support; image input is dropped.",
+    ),
+    # Encoder-decoder (seq2seq) models -> ctranslate2.Translator, not Generator.
+    ModelSpec(
+        key="nllb-200-distilled-1.3b",
+        hf_id="facebook/nllb-200-distilled-1.3B",
+        family="nllb",
+        task="translate",
+        note="Meta NLLB-200 distilled (1.3B), 200 languages. Needs FLORES-200 "
+        "codes as source_lang/target_lang (e.g. 'eng_Latn', 'ind_Latn').",
+    ),
+    ModelSpec(
+        key="t5gemma-2-4b-4b",
+        hf_id="google/t5gemma-2-4b-4b",
+        family="t5gemma",
+        task="translate",
+        note="Google T5Gemma encoder-decoder (text-to-text). Instruct via the "
+        "prompt; source_lang/target_lang not required.",
     ),
 ]
 
@@ -112,10 +110,16 @@ def _load_extra_models() -> list[ModelSpec]:
 
 @dataclass
 class Settings:
-    models_dir: Path = field(default_factory=lambda: Path(_env("CT2_MODELS_DIR", "./ct2_models")))
+    models_dir: Path = field(
+        default_factory=lambda: Path(_env("CT2_MODELS_DIR", "./ct2_models"))
+    )
     device: str = field(default_factory=lambda: _env("CT2_DEVICE", "cuda"))
-    compute_type: str = field(default_factory=lambda: _env("CT2_COMPUTE_TYPE", "int8_float16"))
-    default_model: str = field(default_factory=lambda: _env("CT2_DEFAULT_MODEL", "qwen3-4b"))
+    compute_type: str = field(
+        default_factory=lambda: _env("CT2_COMPUTE_TYPE", "int8_float16")
+    )
+    default_model: str = field(
+        default_factory=lambda: _env("CT2_DEFAULT_MODEL", "qwen3-4b")
+    )
     autoswitch: bool = field(default_factory=lambda: _env_bool("CT2_AUTOSWITCH", True))
     host: str = field(default_factory=lambda: _env("CT2_HOST", "0.0.0.0"))
     port: int = field(default_factory=lambda: int(_env("CT2_PORT", "8000")))

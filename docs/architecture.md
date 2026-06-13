@@ -10,9 +10,9 @@
                                                         ct2_models/<key>/
                                                          (model.bin + vocab)
                                                                   │
- OpenAI client ──HTTP──▶ server.py ──▶ manager.py ──▶ ctranslate2.Generator
-                          (FastAPI)     (lifecycle,        (+ HF tokenizer)
-                                         VRAM, prompts)
+ OpenAI client ──HTTP──▶ server.py ──▶ manager.py ──▶ ctranslate2.Generator   (task=generate)
+                          (FastAPI)     (lifecycle,    └▶ ctranslate2.Translator  (task=translate)
+                                         VRAM, prompts)     (+ HF tokenizer)
 ```
 
 ## Modules
@@ -38,7 +38,9 @@ Holds **at most one model in memory** (Colab-friendly). Responsibilities:
 - **Lifecycle:** `load` / `switch` / `unload`. Switching unloads the current model,
   runs GC, and calls `torch.cuda.empty_cache()` to actually free VRAM.
 - **Auto-convert:** loading an unconverted-but-supported model converts it first.
-- **VRAM:** `vram_stats()` reports total/used/free MiB via `torch.cuda.mem_get_info`.
+- **VRAM:** `vram_stats()` reports total/used/free MiB via `torch.cuda.mem_get_info`
+  (empty when running on CPU). `ram_stats()` reports system RAM + this process's
+  RSS from `/proc` (no extra deps), so CPU-only runs still have memory visibility.
 - **Prompts:** renders each model's HF chat template to a string
   (`apply_chat_template(tokenize=False)`) then encodes it, so prompt formatting
   always matches the model and stays robust across transformers versions (some
@@ -70,9 +72,13 @@ VRAM inspection, and on-demand conversion. On startup it loads the default model
 
 1. Client POSTs to `/v1/chat/completions` with `model` + `messages`.
 2. `manager._require(model)` ensures that model is loaded (auto-switch if enabled).
-3. Messages → tokens via the HF chat template.
-4. `ctranslate2.Generator.generate_batch(...)` runs decoding with sampling params.
-5. Output token ids are decoded and returned as an OpenAI `chat.completion`.
+3. **Decoder-only (`task=generate`):** messages → tokens via the HF chat template,
+   then `ctranslate2.Generator.generate_batch(...)` decodes with sampling params.
+   **Encoder-decoder (`task=translate`):** the last user message is tokenized as
+   source and `ctranslate2.Translator.translate_batch(...)` runs (NLLB forces the
+   target language via `target_prefix`).
+4. Output token ids are decoded and returned as an OpenAI `chat.completion`.
 
-Streaming follows the same path but uses `generate_tokens` and emits
-`text/event-stream` `data:` chunks ending with `[DONE]`.
+Streaming uses `generate_tokens` for decoder-only models (`text/event-stream`
+`data:` chunks ending with `[DONE]`); translation models emit the full result as
+a single chunk.

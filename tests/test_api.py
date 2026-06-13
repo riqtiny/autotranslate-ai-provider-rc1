@@ -86,9 +86,29 @@ def test_auth_rejected_without_key(reachable):
 
 
 # --- inference (needs a usable model) ---------------------------------------
+def _is_translation(model: str) -> bool:
+    return any(k in model for k in ("translategemma", "nllb", "t5gemma"))
+
+
 def _infer_payload(model: str, **overrides) -> dict:
-    """Build a request; translation models need lang codes + a translate prompt."""
-    if "translategemma" in model:
+    """Build a request; translation models need lang codes and/or a prompt."""
+    if "nllb" in model:  # NLLB uses FLORES-200 codes
+        body = {
+            "model": model,
+            "messages": [{"role": "user", "content": "Hello, how are you?"}],
+            "source_lang": "eng_Latn",
+            "target_lang": "fra_Latn",
+            "max_tokens": 64,
+            "temperature": 0.0,
+        }
+    elif "t5gemma" in model:  # text-to-text, instruct via the prompt
+        body = {
+            "model": model,
+            "messages": [{"role": "user", "content": "Translate to French: Hello, how are you?"}],
+            "max_tokens": 64,
+            "temperature": 0.0,
+        }
+    elif "translategemma" in model:  # ISO 639-1 codes
         body = {
             "model": model,
             "messages": [{"role": "user", "content": "Hello, how are you?"}],
@@ -150,31 +170,34 @@ def test_chat_completion_stream(model):
 
 # --- translation: random language -> Indonesian (verbose) -------------------
 # Run with `pytest tests/ -v -s` to see the printed steps.
-_SAMPLES = {
-    "en": "The weather is beautiful today.",
-    "fr": "Le chat dort sur le canapé.",
-    "es": "Me gusta mucho la comida picante.",
-    "de": "Ich lerne seit zwei Jahren programmieren.",
-    "ja": "今日は友達と映画を見に行きます。",
-}
+# Each sample carries the codes for every translation family it can drive.
+_SAMPLES = [
+    # (label, text, iso, flores)
+    ("en", "The weather is beautiful today.", "en", "eng_Latn"),
+    ("fr", "Le chat dort sur le canapé.", "fr", "fra_Latn"),
+    ("es", "Me gusta mucho la comida picante.", "es", "spa_Latn"),
+    ("de", "Ich lerne seit zwei Jahren programmieren.", "de", "deu_Latn"),
+]
 
 
 def test_translate_random_to_indonesian(model):
-    if "translategemma" not in model:
-        pytest.skip(f"'{model}' is not a translation model; set CT2_TEST_MODEL=translategemma-4b-it")
+    if not _is_translation(model):
+        pytest.skip(f"'{model}' is not a translation model "
+                    "(set CT2_TEST_MODEL to translategemma-4b-it / nllb-200-distilled-1.3b / t5gemma-2-4b-4b)")
 
-    src, text = random.choice(list(_SAMPLES.items()))
-    print(f"\n[translate] {src} -> id")
+    label, text, iso, flores = random.choice(_SAMPLES)
+    print(f"\n[translate] {label} -> Indonesian  (model={model})")
     print(f"[translate] source: {text}")
 
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": text}],
-        "source_lang": src,
-        "target_lang": "id",
-        "max_tokens": 64,
-        "temperature": 0.0,
-    }
+    if "nllb" in model:           # FLORES-200 codes
+        payload = _infer_payload(model, messages=[{"role": "user", "content": text}],
+                                 source_lang=flores, target_lang="ind_Latn")
+    elif "t5gemma" in model:      # instruct via prompt, no codes
+        payload = _infer_payload(model, messages=[
+            {"role": "user", "content": f"Translate to Indonesian: {text}"}])
+    else:                          # translategemma, ISO 639-1
+        payload = _infer_payload(model, messages=[{"role": "user", "content": text}],
+                                 source_lang=iso, target_lang="id")
     print(f"[translate] POST /v1/chat/completions  {json.dumps(payload, ensure_ascii=False)}")
 
     r = _post("/v1/chat/completions", json=payload)

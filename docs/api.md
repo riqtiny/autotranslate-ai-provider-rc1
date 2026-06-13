@@ -81,11 +81,13 @@ resp = client.chat.completions.create(
 print(resp.choices[0].message.content)
 ```
 
-### Calling TranslateGemma (translation models)
+### Calling translation models
 
-TranslateGemma's chat template is translation-only and **requires language
-codes** — it rejects plain chat. Pass `source_lang` and `target_lang` (extra
-fields beyond the OpenAI spec); the text to translate is the last user message:
+The server ships three translation models, each with slightly different inputs.
+In all cases the text to translate is the **last user message**.
+
+**TranslateGemma** (`translategemma-4b-it`) — requires ISO 639-1 codes (`en`,
+`fr`, `de`) or regionalized (`en-US`, `de-DE`) as `source_lang`/`target_lang`:
 
 ```bash
 curl http://localhost:8000/v1/chat/completions \
@@ -98,36 +100,70 @@ curl http://localhost:8000/v1/chat/completions \
       }'
 ```
 
-Language codes are ISO 639-1 (`en`, `fr`, `de`) or regionalized
-(`en-US`, `de-DE`). If `source_lang`/`target_lang` are missing for a translation
-model, the request returns HTTP `400`. These fields are ignored by non-translation
-models (e.g. `qwen3-4b`, `gemma3-4b-it`), which take normal chat messages.
+**NLLB-200** (`nllb-200-distilled-1.3b`, encoder-decoder) — requires **FLORES-200** codes
+(`eng_Latn`, `ind_Latn`, `zho_Hans`, …) as `source_lang`/`target_lang`:
+
+```bash
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+        "model": "nllb-200-distilled-1.3b",
+        "messages": [{"role": "user", "content": "The house is wonderful."}],
+        "source_lang": "eng_Latn",
+        "target_lang": "ind_Latn"
+      }'
+```
+
+**T5Gemma** (`t5gemma-2-4b-4b`, encoder-decoder) — general text-to-text, **no
+language codes**; instruct it in the prompt:
+
+```bash
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+        "model": "t5gemma-2-4b-4b",
+        "messages": [{"role": "user", "content": "Translate to Indonesian: The house is wonderful."}]
+      }'
+```
+
+If `source_lang`/`target_lang` are missing for a model that needs them
+(TranslateGemma, NLLB), the request returns HTTP `400`. These fields are ignored
+by chat models (`qwen3-4b`, `gemma3-4b-it`) and by T5Gemma. For full per-model
+behavior see [model-behavior.md](model-behavior.md).
 
 ## Admin endpoints
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/admin/status` | loaded model, device, compute type, VRAM, full registry state |
-| `GET` | `/admin/vram` | GPU memory snapshot (MiB) |
+| `GET` | `/admin/status` | loaded model, device, compute type, VRAM, RAM, full registry state |
+| `GET` | `/admin/vram` | GPU memory snapshot (MiB); `{}` when no CUDA |
+| `GET` | `/admin/ram` | system RAM + process RSS snapshot (MiB) |
 | `POST` | `/admin/switch/{key}` | **online model switch** (loads, auto-converts if needed) |
 | `POST` | `/admin/unload` | free the GPU |
 | `POST` | `/admin/convert/{key}?force=true` | convert a model on demand |
 
 ```bash
-# See what's loaded and how much VRAM is in use
+# See what's loaded and how much VRAM/RAM is in use
 curl http://localhost:8000/admin/status
 
 # Switch models without restarting the server
 curl -X POST http://localhost:8000/admin/switch/gemma3-4b-it
 
-# VRAM only
+# VRAM only / RAM only
 curl http://localhost:8000/admin/vram
+curl http://localhost:8000/admin/ram
 ```
 
-`/admin/vram` example:
+`/admin/vram` example (empty `{}` when running on CPU):
 
 ```json
 { "device": "Tesla T4", "total_mib": 15360, "used_mib": 4210, "free_mib": 11150, "reserved_by_torch_mib": 0 }
+```
+
+`/admin/ram` example (useful when `device` is `cpu` and there's no VRAM):
+
+```json
+{ "total_mib": 12979, "used_mib": 3859, "available_mib": 9120, "process_rss_mib": 4530 }
 ```
 
 ## Errors

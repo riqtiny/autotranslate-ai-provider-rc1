@@ -1,5 +1,8 @@
 # Models & compatibility
 
+> For how each model behaves at request time (prompting, thinking mode, stop
+> tokens, translation inputs), see [model-behavior.md](model-behavior.md).
+
 ## Your requested models vs. CTranslate2 support
 
 CTranslate2 only supports a curated set of architectures. As of CTranslate2 4.7
@@ -31,21 +34,45 @@ images). CTranslate2 supports "Gemma 3 (text only)", so the text translation pat
 can be converted. Image input is dropped. Its chat template is translation-only
 and **requires language codes**: call it with `source_lang` and `target_lang`
 fields (the server maps them into the model's structured `source_lang_code` /
-`target_lang_code` template). See [api.md](api.md#calling-translategemma-translation-models).
+`target_lang_code` template). See [api.md](api.md#calling-translation-models).
 
 **Shipped as:** registry key `translategemma-4b-it`.
+
+### 4. `facebook/nllb-200-distilled-1.3B` — ✅ encoder-decoder
+NLLB-200 is Meta's multilingual translation model covering **200 languages**.
+This is the **distilled 1.3B** variant — smaller and faster, a good fit for a
+Colab T4.
+It's an **encoder-decoder** model, so the server runs it through
+`ctranslate2.Translator` (not `Generator`). It uses **FLORES-200 language codes**
+(e.g. `eng_Latn`, `ind_Latn`, `fra_Latn`) — pass them as `source_lang` /
+`target_lang`. The full list is in the
+[FLORES-200 README](https://github.com/facebookresearch/flores/blob/main/flores200/README.md#languages-in-flores-200).
+
+**Shipped as:** registry key `nllb-200-distilled-1.3b` (`task=translate`).
+
+### 5. `google/t5gemma-2-4b-4b` — ✅ encoder-decoder
+T5Gemma is Google's encoder-decoder (text-to-text) family, built by adapting
+decoder-only Gemma into a seq2seq model. CTranslate2 supports T5Gemma, so it runs
+through `ctranslate2.Translator`. It's **general text-to-text** — instruct it via
+the prompt (e.g. `"Translate to Indonesian: ..."`); it does **not** need
+`source_lang`/`target_lang`.
+
+**Shipped as:** registry key `t5gemma-2-4b-4b` (`task=translate`).
 
 ## The registry
 
 All models live in `app/config.py` as `ModelSpec` entries:
 
-| Key | HF id | Family | Supported |
-|---|---|---|---|
-| `qwen3-4b` | `Qwen/Qwen3-4B` | qwen | ✅ |
-| `qwen3.5-4b` | `Qwen/Qwen3.5-4B` | qwen | ❌ (placeholder) |
-| `gemma3-4b-it` | `google/gemma-3-4b-it` | gemma | ✅ |
-| `gemma4-e4b-it` | `google/gemma-4-E4B-it` | gemma | ❌ (placeholder) |
-| `translategemma-4b-it` | `google/translategemma-4b-it` | translategemma | ✅ (text-only) |
+| Key | HF id | Family | Task | Supported |
+|---|---|---|---|---|
+| `qwen3-4b` | `Qwen/Qwen3-4B` | qwen | generate | ✅ |
+| `gemma3-4b-it` | `google/gemma-3-4b-it` | gemma | generate | ✅ |
+| `translategemma-4b-it` | `google/translategemma-4b-it` | translategemma | generate | ✅ (text-only) |
+| `nllb-200-distilled-1.3b` | `facebook/nllb-200-distilled-1.3B` | nllb | translate | ✅ (enc-dec) |
+| `t5gemma-2-4b-4b` | `google/t5gemma-2-4b-4b` | t5gemma | translate | ✅ (enc-dec) |
+
+The `task` field selects the CTranslate2 engine: `generate` → `Generator`
+(decoder-only models), `translate` → `Translator` (encoder-decoder / seq2seq).
 
 Unsupported entries are intentionally kept so the API can explain *why* and so
 they're trivial to enable if CTranslate2 adds support later.

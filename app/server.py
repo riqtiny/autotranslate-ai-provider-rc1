@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 
 from .config import settings
 from .converter import convert
-from .manager import manager, vram_stats
+from .manager import manager, ram_stats, vram_stats
 from .schemas import (
     ChatChoice,
     ChatChunkChoice,
@@ -116,6 +116,11 @@ def status(_: None = Depends(require_key)) -> dict:
 @app.get("/admin/vram")
 def vram(_: None = Depends(require_key)) -> dict:
     return vram_stats()
+
+
+@app.get("/admin/ram")
+def ram(_: None = Depends(require_key)) -> dict:
+    return ram_stats()
 
 
 @app.post("/admin/switch/{key}")

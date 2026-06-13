@@ -14,17 +14,6 @@ weights (int8/float16) and cuts memory use 2–4x — ideal for fitting 4B model
 a Colab T4. Models must first be **converted** from HuggingFace into CTranslate2's
 binary format. See [docs/architecture.md](docs/architecture.md).
 
-## Model compatibility (important)
-
-The models you asked for don't all map 1:1 onto what CTranslate2 supports today.
-The registry ships with both your intended names and working substitutes:
-
-| Requested | Status | Served as |
-|---|---|---|
-| `Qwen/Qwen3.5-4B` | not supported (CT2 supports Qwen 2.5 / Qwen 3) | `qwen3-4b` → `Qwen/Qwen3-4B` |
-| `google/gemma-4-E4B-it` | not supported (MoE; CT2 only supports gemma-4 31B dense) | `gemma3-4b-it` → `google/gemma-3-4b-it` |
-| `google/translategemma-4b-it` | works (text-only, Gemma 3 based) | `translategemma-4b-it` |
-
 Full details and how to add your own models: [docs/models.md](docs/models.md).
 
 ## Quickstart
@@ -89,9 +78,24 @@ pytest tests/ -v
 The tests hit a live server and skip gracefully if it's unreachable or a model
 isn't converted yet. See [docs/testing.md](docs/testing.md).
 
+## Rclone Sync daily driver command
+
+```bash
+rclone sync . drive-testbench:autotranslate-ai-provider --progress \
+--exclude ".git/**" \
+--exclude "app/__pycache__/**" \
+--exclude "ct2_models/**" \
+--exclude ".pytest_cache/**" \
+--exclude "app/__pycache__/**" \
+--exclude "scripts/__pycache__/**" \
+--exclude "tests/__pycache__/**" \
+--dry-run
+```
+
 ## Docs
 - [Architecture](docs/architecture.md)
 - [Models & compatibility](docs/models.md)
+- [Model behavior](docs/model-behavior.md)
 - [API reference](docs/api.md)
 - [Running on Google Colab](docs/colab.md)
 - [Testing](docs/testing.md)
