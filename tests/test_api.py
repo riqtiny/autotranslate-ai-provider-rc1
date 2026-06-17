@@ -10,6 +10,7 @@ Point them at any base URL (localhost or your Cloudflare tunnel):
 Generation tests auto-skip if no model is loaded/available, so the suite still
 validates the API surface even before a model is converted.
 """
+
 from __future__ import annotations
 
 import json
@@ -72,10 +73,13 @@ def test_admin_vram(reachable):
 
 
 def test_unknown_model_is_400(reachable):
-    r = _post("/v1/chat/completions", json={
-        "model": "does-not-exist",
-        "messages": [{"role": "user", "content": "hi"}],
-    })
+    r = _post(
+        "/v1/chat/completions",
+        json={
+            "model": "does-not-exist",
+            "messages": [{"role": "user", "content": "hi"}],
+        },
+    )
     assert r.status_code == 400
 
 
@@ -87,7 +91,7 @@ def test_auth_rejected_without_key(reachable):
 
 # --- inference (needs a usable model) ---------------------------------------
 def _is_translation(model: str) -> bool:
-    return any(k in model for k in ("translategemma", "nllb", "t5gemma"))
+    return any(k in model for k in ("translategemma", "nllb"))
 
 
 def _infer_payload(model: str, **overrides) -> dict:
@@ -98,13 +102,6 @@ def _infer_payload(model: str, **overrides) -> dict:
             "messages": [{"role": "user", "content": "Hello, how are you?"}],
             "source_lang": "eng_Latn",
             "target_lang": "fra_Latn",
-            "max_tokens": 64,
-            "temperature": 0.0,
-        }
-    elif "t5gemma" in model:  # text-to-text, instruct via the prompt
-        body = {
-            "model": model,
-            "messages": [{"role": "user", "content": "Translate to French: Hello, how are you?"}],
             "max_tokens": 64,
             "temperature": 0.0,
         }
@@ -120,7 +117,9 @@ def _infer_payload(model: str, **overrides) -> dict:
     else:
         body = {
             "model": model,
-            "messages": [{"role": "user", "content": "Reply with the single word: pong"}],
+            "messages": [
+                {"role": "user", "content": "Reply with the single word: pong"}
+            ],
             "max_tokens": 16,
             "temperature": 0.0,
         }
@@ -143,8 +142,9 @@ def test_chat_completion(model):
 
 
 def test_chat_completion_stream(model):
-    r = _post("/v1/chat/completions",
-              json=_infer_payload(model, stream=True), stream=True)
+    r = _post(
+        "/v1/chat/completions", json=_infer_payload(model, stream=True), stream=True
+    )
     if r.status_code == 400:
         pytest.skip(f"model '{model}' not converted/loadable: {r.text}")
     assert r.status_code == 200
@@ -154,7 +154,7 @@ def test_chat_completion_stream(model):
     for line in r.iter_lines(decode_unicode=True):
         if not line or not line.startswith("data: "):
             continue
-        payload = line[len("data: "):]
+        payload = line[len("data: ") :]
         if payload == "[DONE]":
             saw_done = True
             break
@@ -182,23 +182,32 @@ _SAMPLES = [
 
 def test_translate_random_to_indonesian(model):
     if not _is_translation(model):
-        pytest.skip(f"'{model}' is not a translation model "
-                    "(set CT2_TEST_MODEL to translategemma-4b-it / nllb-200-distilled-1.3b / t5gemma-2-4b-4b)")
+        pytest.skip(
+            f"'{model}' is not a translation model "
+            "(set CT2_TEST_MODEL to translategemma-4b-it / nllb-200-distilled-1.3b)"
+        )
 
     label, text, iso, flores = random.choice(_SAMPLES)
     print(f"\n[translate] {label} -> Indonesian  (model={model})")
     print(f"[translate] source: {text}")
 
-    if "nllb" in model:           # FLORES-200 codes
-        payload = _infer_payload(model, messages=[{"role": "user", "content": text}],
-                                 source_lang=flores, target_lang="ind_Latn")
-    elif "t5gemma" in model:      # instruct via prompt, no codes
-        payload = _infer_payload(model, messages=[
-            {"role": "user", "content": f"Translate to Indonesian: {text}"}])
-    else:                          # translategemma, ISO 639-1
-        payload = _infer_payload(model, messages=[{"role": "user", "content": text}],
-                                 source_lang=iso, target_lang="id")
-    print(f"[translate] POST /v1/chat/completions  {json.dumps(payload, ensure_ascii=False)}")
+    if "nllb" in model:  # FLORES-200 codes
+        payload = _infer_payload(
+            model,
+            messages=[{"role": "user", "content": text}],
+            source_lang=flores,
+            target_lang="ind_Latn",
+        )
+    else:  # translategemma, ISO 639-1
+        payload = _infer_payload(
+            model,
+            messages=[{"role": "user", "content": text}],
+            source_lang=iso,
+            target_lang="id",
+        )
+    print(
+        f"[translate] POST /v1/chat/completions  {json.dumps(payload, ensure_ascii=False)}"
+    )
 
     r = _post("/v1/chat/completions", json=payload)
     print(f"[translate] status: {r.status_code}")

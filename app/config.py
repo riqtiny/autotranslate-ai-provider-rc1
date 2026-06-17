@@ -87,14 +87,6 @@ _DEFAULT_MODELS: list[ModelSpec] = [
         note="Meta NLLB-200 distilled (1.3B), 200 languages. Needs FLORES-200 "
         "codes as source_lang/target_lang (e.g. 'eng_Latn', 'ind_Latn').",
     ),
-    ModelSpec(
-        key="t5gemma-2-4b-4b",
-        hf_id="google/t5gemma-2-4b-4b",
-        family="t5gemma",
-        task="translate",
-        note="Google T5Gemma encoder-decoder (text-to-text). Instruct via the "
-        "prompt; source_lang/target_lang not required.",
-    ),
 ]
 
 

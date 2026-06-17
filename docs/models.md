@@ -3,30 +3,19 @@
 > For how each model behaves at request time (prompting, thinking mode, stop
 > tokens, translation inputs), see [model-behavior.md](model-behavior.md).
 
-## Your requested models vs. CTranslate2 support
+## CTranslate2 support notes
 
-CTranslate2 only supports a curated set of architectures. As of CTranslate2 4.7
-(verified against the official Transformers guide), here is where the three
-requested models stand:
+CTranslate2 only supports a curated set of architectures. This project ships
+small, text-focused models that fit Colab-style GPUs and are known to convert
+with the current CTranslate2 flow.
 
-### 1. `Qwen/Qwen3.5-4B` — ❌ not supported
-CTranslate2 supports **Qwen 2.5** and **Qwen 3**, not Qwen 3.5. Qwen3.5-4B is also
-a multimodal (image-text-to-text) model, which CTranslate2 does not handle.
+### 1. `Qwen/Qwen3-4B` — ✅ general chat
+Registry key `qwen3-4b` maps to `Qwen/Qwen3-4B`, a text-only Qwen model
+officially supported by CTranslate2. MoE Qwen variants are not supported.
 
-**Substitute shipped:** registry key `qwen3-4b` → `Qwen/Qwen3-4B` (text-only,
-officially supported and documented by CTranslate2). MoE Qwen variants are not
-supported.
-
-### 2. `google/gemma-4-E4B-it` — ❌ not supported
-The CTranslate2 docs are explicit: for Gemma 4, *"Only the 31B dense model is
-supported. The MoE variants (E2B, E4B) are not supported."* The 31B dense model
-won't fit a Colab T4 anyway.
-
-**Substitute shipped:** registry key `gemma3-4b-it` → `google/gemma-3-4b-it`
-(Gemma 3, text-only path, supported by CTranslate2 and Colab-sized).
-
-> Note: the requested id looks like a mix of `gemma-4` and the Gemma 3n `E4B`
-> naming. Neither the Gemma 3n `E4B` nor Gemma 4 `E4B` MoE models are convertible.
+### 2. `google/gemma-3-4b-it` — ✅ general chat
+Registry key `gemma3-4b-it` maps to `google/gemma-3-4b-it`, a Colab-sized,
+text-only Gemma model supported by CTranslate2.
 
 ### 3. `google/translategemma-4b-it` — ⚠️ works text-only
 TranslateGemma is **Gemma-3-based** and multimodal (it can translate text in
@@ -50,15 +39,6 @@ It's an **encoder-decoder** model, so the server runs it through
 
 **Shipped as:** registry key `nllb-200-distilled-1.3b` (`task=translate`).
 
-### 5. `google/t5gemma-2-4b-4b` — ✅ encoder-decoder
-T5Gemma is Google's encoder-decoder (text-to-text) family, built by adapting
-decoder-only Gemma into a seq2seq model. CTranslate2 supports T5Gemma, so it runs
-through `ctranslate2.Translator`. It's **general text-to-text** — instruct it via
-the prompt (e.g. `"Translate to Indonesian: ..."`); it does **not** need
-`source_lang`/`target_lang`.
-
-**Shipped as:** registry key `t5gemma-2-4b-4b` (`task=translate`).
-
 ## The registry
 
 All models live in `app/config.py` as `ModelSpec` entries:
@@ -69,7 +49,6 @@ All models live in `app/config.py` as `ModelSpec` entries:
 | `gemma3-4b-it` | `google/gemma-3-4b-it` | gemma | generate | ✅ |
 | `translategemma-4b-it` | `google/translategemma-4b-it` | translategemma | generate | ✅ (text-only) |
 | `nllb-200-distilled-1.3b` | `facebook/nllb-200-distilled-1.3B` | nllb | translate | ✅ (enc-dec) |
-| `t5gemma-2-4b-4b` | `google/t5gemma-2-4b-4b` | t5gemma | translate | ✅ (enc-dec) |
 
 The `task` field selects the CTranslate2 engine: `generate` → `Generator`
 (decoder-only models), `translate` → `Translator` (encoder-decoder / seq2seq).

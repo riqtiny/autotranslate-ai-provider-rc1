@@ -12,12 +12,11 @@ Summary:
 | `gemma3-4b-it` | `gemma` | chat / general | `messages` | text-only (no images) | `<end_of_turn>`, eos |
 | `translategemma-4b-it` | `translategemma` | translation only | `messages` + `source_lang`/`target_lang` | structured translate template | `<end_of_turn>`, eos |
 | `nllb-200-distilled-1.3b` | `nllb` | translation (enc-dec) | `messages` + FLORES `source_lang`/`target_lang` | `Translator`, target-prefix forcing | model eos |
-| `t5gemma-2-4b-4b` | `t5gemma` | translation (enc-dec) | `messages` (instruct via prompt) | `Translator`, text-to-text | model eos |
 
 Two engine types (set by the registry `task` field):
 - **`generate` (decoder-only):** `qwen`, `gemma`, `translategemma`. Prompts are
   rendered with the model's HF chat template; supports streaming token-by-token.
-- **`translate` (encoder-decoder):** `nllb`, `t5gemma`. Run via
+- **`translate` (encoder-decoder):** `nllb`. Run via
   `ctranslate2.Translator`; the last user message is the source text. Streaming
   returns the full translation as a single chunk.
 
@@ -112,23 +111,6 @@ curl localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d '
   "model":"nllb-200-distilled-1.3b",
   "messages":[{"role":"user","content":"The weather is beautiful today."}],
   "source_lang":"eng_Latn","target_lang":"ind_Latn"
-}'
-```
-
-## `t5gemma-2-4b-4b` — T5Gemma (encoder-decoder, text-to-text)
-
-- **Engine:** `ctranslate2.Translator` (encoder-decoder), `task=translate`.
-- **Use for:** general text-to-text, including translation by instruction.
-- **Input:** the last user message is the source text. **No language codes** —
-  instruct it in the prompt, e.g. `"Translate to Indonesian: <text>"`.
-  `source_lang`/`target_lang` are ignored if sent.
-- **Streaming:** returns the whole output as one chunk.
-- **Stops on:** the model's EOS token.
-
-```bash
-curl localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{
-  "model":"t5gemma-2-4b-4b",
-  "messages":[{"role":"user","content":"Translate to Indonesian: The weather is beautiful today."}]
 }'
 ```
 

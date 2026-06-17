@@ -124,7 +124,20 @@ requests.post("http://localhost:8000/admin/switch/translategemma-4b-it")
 print(requests.get("http://localhost:8000/admin/vram").json())
 ```
 
-## 9. Run the test suite
+## 9. Run the translation comparison lab
+
+Open the local Colab URL or the tunnel URL in a browser:
+
+```text
+http://localhost:8000/translation-lab
+https://<id>.trycloudflare.com/translation-lab
+```
+
+The lab lists supported models, switches models online, translates ten popular
+source languages into Indonesian, and shows RAM/VRAM after the session. If
+`CT2_API_KEY` is set, paste that key into the page before running.
+
+## 10. Run the test suite
 
 The API tests in `tests/` hit a live server, so point them at localhost (in
 Colab) or your tunnel URL (from your laptop):

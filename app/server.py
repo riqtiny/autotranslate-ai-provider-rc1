@@ -6,11 +6,12 @@ import time
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 
 from .config import settings
 from .converter import convert
 from .manager import manager, ram_stats, vram_stats
+from .web import TRANSLATION_LAB_HTML
 from .schemas import (
     ChatChoice,
     ChatChunkChoice,
@@ -37,6 +38,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="CTranslate2 OpenAI-compatible Provider", lifespan=lifespan)
+
+
+@app.get("/translation-lab", response_class=HTMLResponse, include_in_schema=False)
+def translation_lab() -> str:
+    return TRANSLATION_LAB_HTML
 
 
 def require_key(authorization: str | None = Header(default=None)) -> None:

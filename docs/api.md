@@ -114,22 +114,31 @@ curl http://localhost:8000/v1/chat/completions \
       }'
 ```
 
-**T5Gemma** (`t5gemma-2-4b-4b`, encoder-decoder) — general text-to-text, **no
-language codes**; instruct it in the prompt:
-
-```bash
-curl http://localhost:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-        "model": "t5gemma-2-4b-4b",
-        "messages": [{"role": "user", "content": "Translate to Indonesian: The house is wonderful."}]
-      }'
-```
-
 If `source_lang`/`target_lang` are missing for a model that needs them
 (TranslateGemma, NLLB), the request returns HTTP `400`. These fields are ignored
-by chat models (`qwen3-4b`, `gemma3-4b-it`) and by T5Gemma. For full per-model
+by chat models (`qwen3-4b`, `gemma3-4b-it`). For full per-model
 behavior see [model-behavior.md](model-behavior.md).
+
+## Web tools
+
+### `GET /translation-lab`
+
+Serves a self-contained browser UI for comparing every supported model on ten
+source languages translated into Indonesian. It uses existing API endpoints:
+
+- `GET /v1/models` and `GET /admin/status` to discover models and families.
+- `POST /admin/switch/{key}` to change the loaded model before a run.
+- `POST /v1/chat/completions` to translate each sample.
+- `GET /admin/status` after the session to show RAM/VRAM and loaded model stats.
+
+Open it at:
+
+```text
+http://localhost:8000/translation-lab
+```
+
+If `CT2_API_KEY` is set, enter the same key in the page. The page itself is
+static HTML; protected API calls still require the Bearer token.
 
 ## Admin endpoints
 

@@ -3,6 +3,7 @@
 Holds at most one model in memory at a time (Colab-friendly). Switching unloads
 the current model first. All model knowledge comes from the registry in config.
 """
+
 from __future__ import annotations
 
 import gc
@@ -69,8 +70,8 @@ def ram_stats() -> dict:
 @dataclass
 class LoadedModel:
     spec: ModelSpec
-    generator: object        # ctranslate2.Generator
-    tokenizer: object        # transformers tokenizer
+    generator: object  # ctranslate2.Generator
+    tokenizer: object  # transformers tokenizer
     end_tokens: list[str]
     loaded_at: float
 
@@ -177,9 +178,7 @@ class ModelManager:
         if key and (not self._current or self._current.spec.key != key):
             if self.cfg.autoswitch:
                 return self.load(key)
-            raise ValueError(
-                f"Model '{key}' is not loaded and autoswitch is off."
-            )
+            raise ValueError(f"Model '{key}' is not loaded and autoswitch is off.")
         if self._current is None:
             if not key:
                 raise ValueError("No model loaded and no model specified.")
@@ -187,9 +186,14 @@ class ModelManager:
         return self._current
 
     # --- prompt building -----------------------------------------------------
-    def build_tokens(self, lm: LoadedModel, messages: list[dict], *,
-                     source_lang: str | None = None,
-                     target_lang: str | None = None) -> list[str]:
+    def build_tokens(
+        self,
+        lm: LoadedModel,
+        messages: list[dict],
+        *,
+        source_lang: str | None = None,
+        target_lang: str | None = None,
+    ) -> list[str]:
         tok = lm.tokenizer
         kwargs = {}
         if lm.spec.family == "translategemma":
@@ -224,20 +228,35 @@ class ModelManager:
         )
         if not text:
             raise ValueError("no user message to translate.")
-        return [{
-            "role": "user",
-            "content": [{
-                "type": "text",
-                "source_lang_code": source_lang,
-                "target_lang_code": target_lang,
-                "text": text,
-            }],
-        }]
+        return [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "source_lang_code": source_lang,
+                        "target_lang_code": target_lang,
+                        "text": text,
+                    }
+                ],
+            }
+        ]
 
     # --- inference -----------------------------------------------------------
-    def _translate(self, lm: LoadedModel, messages, *, max_tokens, temperature,
-                   top_p, top_k, repetition_penalty, source_lang, target_lang) -> dict:
-        """Encoder-decoder path (NLLB, T5Gemma) via ctranslate2.Translator."""
+    def _translate(
+        self,
+        lm: LoadedModel,
+        messages,
+        *,
+        max_tokens,
+        temperature,
+        top_p,
+        top_k,
+        repetition_penalty,
+        source_lang,
+        target_lang,
+    ) -> dict:
+        """Encoder-decoder path (NLLB) via ctranslate2.Translator."""
         tok = lm.tokenizer
         text = next(
             (m["content"] for m in reversed(messages) if m["role"] == "user"), None
@@ -279,20 +298,35 @@ class ModelManager:
             "completion_tokens": len(hyp),
         }
 
-    def generate(self, messages: list[dict], *, model: str | None = None,
-                 max_tokens: int = 512, temperature: float = 0.7,
-                 top_p: float = 1.0, top_k: int = 0,
-                 repetition_penalty: float = 1.0,
-                 source_lang: str | None = None,
-                 target_lang: str | None = None) -> dict:
+    def generate(
+        self,
+        messages: list[dict],
+        *,
+        model: str | None = None,
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+        top_p: float = 1.0,
+        top_k: int = 0,
+        repetition_penalty: float = 1.0,
+        source_lang: str | None = None,
+        target_lang: str | None = None,
+    ) -> dict:
         lm = self._require(model)
         if lm.spec.task == "translate":
-            return self._translate(lm, messages, max_tokens=max_tokens,
-                                   temperature=temperature, top_p=top_p,
-                                   top_k=top_k, repetition_penalty=repetition_penalty,
-                                   source_lang=source_lang, target_lang=target_lang)
-        tokens = self.build_tokens(lm, messages, source_lang=source_lang,
-                                   target_lang=target_lang)
+            return self._translate(
+                lm,
+                messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                repetition_penalty=repetition_penalty,
+                source_lang=source_lang,
+                target_lang=target_lang,
+            )
+        tokens = self.build_tokens(
+            lm, messages, source_lang=source_lang, target_lang=target_lang
+        )
         results = lm.generator.generate_batch(
             [tokens],
             max_length=max_tokens,
@@ -312,22 +346,37 @@ class ModelManager:
             "completion_tokens": len(out_ids),
         }
 
-    def stream(self, messages: list[dict], *, model: str | None = None,
-               max_tokens: int = 512, temperature: float = 0.7,
-               top_p: float = 1.0, top_k: int = 0,
-               repetition_penalty: float = 1.0,
-               source_lang: str | None = None,
-               target_lang: str | None = None) -> Iterator[str]:
+    def stream(
+        self,
+        messages: list[dict],
+        *,
+        model: str | None = None,
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+        top_p: float = 1.0,
+        top_k: int = 0,
+        repetition_penalty: float = 1.0,
+        source_lang: str | None = None,
+        target_lang: str | None = None,
+    ) -> Iterator[str]:
         lm = self._require(model)
         if lm.spec.task == "translate":
             # Translator returns a complete result; emit it as one delta.
-            yield self._translate(lm, messages, max_tokens=max_tokens,
-                                  temperature=temperature, top_p=top_p, top_k=top_k,
-                                  repetition_penalty=repetition_penalty,
-                                  source_lang=source_lang, target_lang=target_lang)["text"]
+            yield self._translate(
+                lm,
+                messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                repetition_penalty=repetition_penalty,
+                source_lang=source_lang,
+                target_lang=target_lang,
+            )["text"]
             return
-        tokens = self.build_tokens(lm, messages, source_lang=source_lang,
-                                   target_lang=target_lang)
+        tokens = self.build_tokens(
+            lm, messages, source_lang=source_lang, target_lang=target_lang
+        )
         step_results = lm.generator.generate_tokens(
             tokens,
             max_length=max_tokens,
@@ -343,7 +392,7 @@ class ModelManager:
             acc.append(step.token_id)
             text = lm.tokenizer.decode(acc, skip_special_tokens=True)
             if len(text) > len(prev):
-                yield text[len(prev):]
+                yield text[len(prev) :]
                 prev = text
 
 
