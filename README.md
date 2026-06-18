@@ -1,4 +1,4 @@
-# autotranslate-ai-provider
+# AI Translate Provider and Model Comparison
 
 A modular, OpenAI-compatible inference server built on **CTranslate2**. It converts
 HuggingFace models to the CTranslate2 format, serves them through an
