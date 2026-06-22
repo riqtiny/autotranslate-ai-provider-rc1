@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import time
 
 import pytest
 import requests
@@ -32,6 +33,38 @@ def _get(path: str, **kw):
 
 def _post(path: str, **kw):
     return requests.post(f"{BASE}{path}", headers=HEADERS, timeout=TIMEOUT, **kw)
+
+
+# What each leaderboard metric measures — printed by the benchmark tests so a
+# `-s` run explains the numbers, not just emits them.
+_METRIC_INFO = {
+    "bleu": "BLEU / SacreBLEU: n-gram precision overlap vs the reference (0-100). "
+    "SacreBLEU is the standardized, reproducible implementation.",
+    "chrf": "ChrF++: character n-gram F-score plus word bigrams; robust on short "
+    "sentences and rich morphology (0-100).",
+    "comet": "COMET: neural metric (XLM-R) trained on human ratings; scores meaning "
+    "from source + hypothesis + reference (~0-1).",
+}
+
+
+def _resource_line(status: dict) -> str:
+    """Human-readable memory usage, picking GPU VRAM or CPU RAM by mode.
+
+    /admin/vram is empty ({}) when there's no CUDA, so a populated vram block
+    means we're on GPU; otherwise report system RAM + this process's RSS.
+    """
+    device = status.get("device", "?")
+    vram = status.get("vram") or {}
+    ram = status.get("ram") or {}
+    if vram.get("used_mib") is not None:
+        return (
+            f"GPU mode [{vram.get('device', device)}]: "
+            f"VRAM {vram['used_mib']}/{vram.get('total_mib')} MiB used"
+        )
+    return (
+        f"CPU mode [{device}]: RAM {ram.get('used_mib')}/{ram.get('total_mib')} MiB "
+        f"used, process RSS {ram.get('process_rss_mib')} MiB"
+    )
 
 
 @pytest.fixture(scope="session")
@@ -128,7 +161,9 @@ def _infer_payload(model: str, **overrides) -> dict:
 
 
 def test_chat_completion(model):
+    t0 = time.perf_counter()
     r = _post("/v1/chat/completions", json=_infer_payload(model))
+    elapsed = time.perf_counter() - t0
     if r.status_code == 400:
         pytest.skip(f"model '{model}' not converted/loadable: {r.text}")
     assert r.status_code == 200
@@ -139,6 +174,15 @@ def test_chat_completion(model):
     assert isinstance(content, str) and content.strip()
     u = body["usage"]
     assert u["total_tokens"] == u["prompt_tokens"] + u["completion_tokens"]
+
+    # Throughput + device-aware memory (run with -s to see these).
+    tps = u["completion_tokens"] / elapsed if elapsed > 0 else 0.0
+    print(
+        f"\n[infer] {model}: {u['completion_tokens']} tokens in {elapsed:.2f}s "
+        f"= {tps:.1f} tok/s"
+    )
+    print(f"[infer] {_resource_line(_get('/admin/status').json())}")
+    assert tps >= 0
 
 
 def test_chat_completion_stream(model):
@@ -209,7 +253,9 @@ def test_translate_random_to_indonesian(model):
         f"[translate] POST /v1/chat/completions  {json.dumps(payload, ensure_ascii=False)}"
     )
 
+    t0 = time.perf_counter()
     r = _post("/v1/chat/completions", json=payload)
+    elapsed = time.perf_counter() - t0
     print(f"[translate] status: {r.status_code}")
     if r.status_code != 200:
         # print the FULL error (pytest's skip reason truncates it)
@@ -218,8 +264,56 @@ def test_translate_random_to_indonesian(model):
 
     body = r.json()
     translation = body["choices"][0]["message"]["content"]
+    usage = body["usage"]
+    tps = usage["completion_tokens"] / elapsed if elapsed > 0 else 0.0
     print(f"[translate] indonesian: {translation}")
-    print(f"[translate] usage: {body['usage']}")
+    print(f"[translate] usage: {usage}")
+    print(
+        f"[translate] throughput: {usage['completion_tokens']} tokens in "
+        f"{elapsed:.2f}s = {tps:.1f} tok/s"
+    )
+    print(f"[translate] {_resource_line(_get('/admin/status').json())}")
 
     assert translation.strip(), "empty translation"
     assert body["model"] == model
+
+
+def test_metrics_score(reachable):
+    """Benchmark scoring endpoint: BLEU / ChrF++ over one segment.
+
+    Prints what each metric measures, then the scores. The metric libs are
+    optional extras (requirements-metrics.txt); when they're absent the endpoint
+    still returns 200 and reports them as unavailable, so this test skips rather
+    than fails. Run with `-s` to read the explanations and numbers.
+    """
+    print("\n[metrics] what the leaderboard measures:")
+    for info in _METRIC_INFO.values():
+        print(f"[metrics]   - {info}")
+
+    payload = {
+        "comet": False,  # keep CI light; COMET is exercised manually on Colab
+        "segments": [
+            {
+                "src": "Le chat dort sur le canapé.",
+                "mt": "Kucing tidur di sofa.",
+                "ref": "Kucing itu tidur di sofa.",
+            }
+        ],
+    }
+    r = _post("/metrics/score", json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    print(f"[metrics] available backends: {body['available']}")
+
+    if not body["available"].get("sacrebleu"):
+        print(f"[metrics] errors: {body.get('errors')}")
+        pytest.skip(
+            "sacrebleu not installed server-side "
+            "(pip install -r requirements-metrics.txt)"
+        )
+
+    system = body["system"]
+    print(f"[metrics] system  BLEU={system.get('bleu')}  ChrF++={system.get('chrf')}")
+    assert "bleu" in system and "chrf" in system
+    assert len(body["segments"]) == 1
+    assert 0 <= system["bleu"] <= 100 and 0 <= system["chrf"] <= 100

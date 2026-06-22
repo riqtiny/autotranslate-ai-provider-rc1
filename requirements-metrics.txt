@@ -1,0 +1,11 @@
+# Optional translation-quality metrics (BLEU/SacreBLEU, ChrF++, COMET).
+# Not needed for inference or the API client tests — install only when you
+# want the /metrics/score endpoint and the Translation Lab leaderboard:
+#
+#   pip install -r requirements-metrics.txt
+#
+# COMET (unbabel-comet) is heavy (pulls in pytorch-lightning + an XLM-R model
+# download). BLEU and ChrF++ come from sacrebleu and are pure-Python/instant.
+
+sacrebleu>=2.4.0
+unbabel-comet>=2.2.0

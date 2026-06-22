@@ -78,6 +78,29 @@ class ChatCompletionChunk(BaseModel):
     choices: list[ChatChunkChoice]
 
 
+# --- /metrics/score ---
+class MetricSegment(BaseModel):
+    src: str  # source sentence (original language)
+    mt: str  # machine translation / hypothesis
+    ref: str  # gold reference translation
+
+
+class MetricRequest(BaseModel):
+    model: str | None = None  # optional label for the system being scored
+    segments: list[MetricSegment]
+    comet: bool = False  # opt-in: COMET is heavy and loaded lazily
+
+    model_config = {"extra": "ignore"}
+
+
+class MetricResponse(BaseModel):
+    available: dict[str, bool]  # which backends are installed
+    comet_model: str | None = None
+    segments: list[dict]  # per-segment scores: {"bleu", "chrf", "comet"?}
+    system: dict  # corpus/system scores: {"bleu", "chrf", "comet"?}
+    errors: dict[str, str] = Field(default_factory=dict)
+
+
 # --- /v1/models ---
 class ModelCard(BaseModel):
     id: str

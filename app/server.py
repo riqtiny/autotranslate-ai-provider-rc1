@@ -20,6 +20,8 @@ from .schemas import (
     ChatCompletionResponse,
     ChatMessage,
     DeltaMessage,
+    MetricRequest,
+    MetricResponse,
     ModelCard,
     ModelList,
     Usage,
@@ -114,6 +116,19 @@ def _stream_chunks(req, messages, kwargs):
 
 
 # --- admin -------------------------------------------------------------------
+@app.post("/metrics/score", response_model=MetricResponse)
+def metrics_score(req: MetricRequest, _: None = Depends(require_key)) -> MetricResponse:
+    if not req.segments:
+        raise HTTPException(status_code=400, detail="segments must be non-empty")
+    # Lazy import so the server boots even when the optional metric libs
+    # (sacrebleu, unbabel-comet) aren't installed; metrics.score() reports
+    # which backends are available.
+    from .metrics import score
+
+    result = score([s.model_dump() for s in req.segments], want_comet=req.comet)
+    return MetricResponse(**result)
+
+
 @app.get("/admin/status")
 def status(_: None = Depends(require_key)) -> dict:
     return manager.status()

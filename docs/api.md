@@ -124,12 +124,20 @@ behavior see [model-behavior.md](model-behavior.md).
 ### `GET /translation-lab`
 
 Serves a self-contained browser UI for comparing every supported model on ten
-source languages translated into Indonesian. It uses existing API endpoints:
+source languages translated into Indonesian, then **scoring and ranking** them
+with BLEU/SacreBLEU, ChrF++ and (optional) COMET in a leaderboard. It uses
+existing API endpoints:
 
 - `GET /v1/models` and `GET /admin/status` to discover models and families.
 - `POST /admin/switch/{key}` to change the loaded model before a run.
 - `POST /v1/chat/completions` to translate each sample.
+- `POST /metrics/score` to score each model's translations against gold
+  Indonesian references (see [Metrics](#post-metricsscore)).
 - `GET /admin/status` after the session to show RAM/VRAM and loaded model stats.
+
+Alongside the scores, the leaderboard reports per-model **throughput (tok/s)** and
+**device-aware memory** — GPU VRAM when running on CUDA, otherwise system RAM —
+and includes an in-page explainer of what each metric measures.
 
 Open it at:
 
@@ -139,6 +147,58 @@ http://localhost:8000/translation-lab
 
 If `CT2_API_KEY` is set, enter the same key in the page. The page itself is
 static HTML; protected API calls still require the Bearer token.
+
+## Metrics
+
+### `POST /metrics/score`
+
+Scores a batch of translation segments for one model against gold references and
+returns per-segment and corpus/system scores. **BLEU/SacreBLEU** and **ChrF++**
+are always computed (via `sacrebleu`); **COMET** is computed only when
+`"comet": true` and `unbabel-comet` is installed.
+
+These metrics are **optional extras** — install them with
+`pip install -r requirements-metrics.txt`. If a backend is missing the endpoint
+still returns `200`, with the missing metric flagged in `available` / `errors`
+instead of failing.
+
+| Field | Default | Notes |
+|---|---|---|
+| `segments` | — | list of `{ "src", "mt", "ref" }` (source, hypothesis, reference) |
+| `comet` | `false` | also run COMET (heavy; loads a neural model on first use) |
+| `model` | — | optional label for the scored system |
+
+```bash
+curl http://localhost:8000/metrics/score \
+  -H "Content-Type: application/json" \
+  -d '{
+        "comet": false,
+        "segments": [
+          {"src": "Le chat dort sur le canapé.",
+           "mt": "Kucing tidur di sofa.",
+           "ref": "Kucing itu tidur di sofa."}
+        ]
+      }'
+```
+
+```json
+{
+  "available": { "sacrebleu": true, "comet": false },
+  "comet_model": null,
+  "segments": [ { "bleu": 35.36, "chrf": 62.41 } ],
+  "system": { "bleu": 35.36, "chrf": 62.41 },
+  "errors": { "comet": "unbabel-comet not installed" }
+}
+```
+
+With `"comet": true` and the extras installed, each segment gains a `comet`
+score (~0–1) and `system.comet` holds the COMET system score; `comet_model`
+reports the checkpoint used (default `Unbabel/wmt22-comet-da`).
+
+ChrF++ is SacreBLEU's chrF with word bigrams (`word_order=2`, `char_order=6`,
+`beta=2`). BLEU and ChrF++ are reported on a 0–100 scale; higher is better for
+all three metrics. COMET runs on CPU by default — see
+[colab.md](colab.md) for the `CT2_COMET_DEVICE` / `CT2_COMET_MODEL` settings.
 
 ## Admin endpoints
 

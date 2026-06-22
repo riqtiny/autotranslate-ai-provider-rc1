@@ -137,6 +137,28 @@ The lab lists supported models, switches models online, translates ten popular
 source languages into Indonesian, and shows RAM/VRAM after the session. If
 `CT2_API_KEY` is set, paste that key into the page before running.
 
+It also **scores and ranks** each model with BLEU/SacreBLEU, ChrF++ and (optional)
+COMET in a leaderboard. The metric libraries are optional extras — install them
+once:
+
+```python
+!pip install -q -r requirements-metrics.txt    # sacrebleu + unbabel-comet
+```
+
+- **BLEU + ChrF++** (`sacrebleu`) are pure-Python and always on once installed.
+- **COMET** (`unbabel-comet`) is a neural metric — tick the **Score COMET** toggle
+  in the page. On first use it downloads a checkpoint (default
+  `Unbabel/wmt22-comet-da`, ~2.3 GB). That model is **gated** on HuggingFace, so
+  set `HF_TOKEN` (you already need it for the Gemma family) before scoring.
+- COMET runs on **CPU by default** (`CT2_COMET_DEVICE=cpu`) so it never competes
+  for VRAM with the loaded 4B translation model. For a faster pass set
+  `os.environ["CT2_COMET_DEVICE"] = "cuda"` — but ensure there's spare VRAM
+  (unload the translation model first, or use a smaller compute type).
+- Override the checkpoint with `CT2_COMET_MODEL` if you prefer another COMET model.
+
+Without the extras installed the lab still runs and shows latency/tokens/RAM/VRAM;
+the leaderboard simply notes that the metrics are unavailable.
+
 ## 10. Run the test suite
 
 The API tests in `tests/` hit a live server, so point them at localhost (in

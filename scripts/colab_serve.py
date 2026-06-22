@@ -9,6 +9,7 @@ It launches `python run.py`, downloads `cloudflared` if missing, opens a quick
 tunnel, parses the `https://*.trycloudflare.com` URL from cloudflared's logs and
 prints it. Point your laptop / backend at `<url>/v1`.
 """
+
 from __future__ import annotations
 
 import os
@@ -60,6 +61,7 @@ def main() -> int:
             if m and not public_url:
                 public_url = m.group(0)
                 print("\n" + "=" * 64)
+                print(f"  Translation Lab: {public_url}/translation-lab")
                 print(f"  PUBLIC API:  {public_url}/v1")
                 print(f"  health:      {public_url}/admin/status")
                 print("=" * 64 + "\n", flush=True)

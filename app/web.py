@@ -242,7 +242,7 @@ TRANSLATION_LAB_HTML = r"""<!doctype html>
     .language-item span { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
 
     .main-stack { display: grid; gap: 28px; }
-    .metrics { padding: 18px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .metrics { padding: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
     .metric {
       border-top: 1px solid var(--line);
       padding-top: 12px;
@@ -278,8 +278,46 @@ TRANSLATION_LAB_HTML = r"""<!doctype html>
     .result-card small { display: block; color: var(--muted); margin-top: 5px; font: 12px JetBrains Mono, monospace; }
     .source { color: var(--muted); line-height: 1.45; }
     .translation { color: var(--text); line-height: 1.55; }
+    .ref-line { color: var(--soft); font-size: 12px; margin-top: 6px; }
+    .ref-line b { color: var(--muted); font-weight: 600; }
     .bad { color: var(--danger); }
     .ok { color: var(--ok); }
+
+    .toggle-field { margin-bottom: 16px; }
+    .toggle { display: flex; align-items: center; gap: 10px; text-transform: none; letter-spacing: normal; font-weight: 600; cursor: pointer; }
+    .toggle input { width: auto; min-height: 0; accent-color: var(--accent); }
+
+    .score-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .badge {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: 99px;
+      border: 1px solid var(--line);
+      background: rgba(201, 162, 79, 0.06);
+      font: 600 11px JetBrains Mono, monospace;
+    }
+    .badge i { font-style: normal; color: var(--soft); text-transform: uppercase; letter-spacing: 0.06em; }
+    .badge b { color: var(--accent); font-weight: 700; }
+
+    .leaderboard { padding: 20px; }
+    .lb-table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }
+    .lb-table th, .lb-table td { text-align: right; padding: 11px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    .lb-table th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; }
+    .lb-table th:first-child, .lb-table td:first-child { text-align: left; }
+    .lb-table td:first-child { color: var(--text); font-weight: 600; }
+    .lb-table td.num { font: 600 14px JetBrains Mono, monospace; }
+    .lb-table tbody tr:hover { background: rgba(201, 162, 79, 0.05); }
+    .lb-table td.best { color: var(--ok); }
+    .lb-note { margin-top: 12px; color: var(--soft); font-size: 12px; line-height: 1.5; }
+    .lb-note.warn { color: #d7a69f; }
+
+    .metric-info { margin-top: 14px; border: 1px solid var(--line); border-radius: 16px; background: rgba(16, 15, 13, 0.4); padding: 10px 16px; }
+    .metric-info summary { cursor: pointer; font-weight: 700; color: var(--accent); font-size: 13px; }
+    .metric-info ul { margin: 12px 0 4px; padding-left: 18px; color: var(--muted); line-height: 1.6; font-size: 13px; }
+    .metric-info li { margin-bottom: 8px; }
+    .metric-info b { color: var(--text); }
 
     .empty, .error-box, .loading-box {
       min-height: 260px;
@@ -356,6 +394,13 @@ TRANSLATION_LAB_HTML = r"""<!doctype html>
           <select id="modelSelect"></select>
           <div class="help">Changing selection calls <code>/admin/switch/{model}</code>.</div>
         </div>
+        <div class="field toggle-field">
+          <label class="toggle">
+            <input id="cometToggle" type="checkbox" />
+            <span>Score COMET (neural, slower)</span>
+          </label>
+          <div class="help">BLEU &amp; ChrF++ are always scored. COMET needs <code>requirements-metrics.txt</code>.</div>
+        </div>
         <div class="button-row">
           <button id="runSelected" class="primary">Run selected</button>
           <button id="runAll" class="secondary">Compare all</button>
@@ -380,9 +425,30 @@ TRANSLATION_LAB_HTML = r"""<!doctype html>
       <div class="main-stack">
         <section class="metrics" aria-label="Machine resource stats">
           <div class="metric"><span>Loaded model</span><strong id="metricLoaded">none</strong></div>
+          <div class="metric"><span>Compute mode</span><strong id="metricMode">unknown</strong></div>
           <div class="metric"><span>VRAM used</span><strong id="metricVram">n/a</strong></div>
           <div class="metric"><span>RAM used</span><strong id="metricRam">n/a</strong></div>
+          <div class="metric"><span>Throughput</span><strong id="metricTps">n/a</strong></div>
           <div class="metric"><span>Session time</span><strong id="metricTime">0.0s</strong></div>
+        </section>
+
+        <section class="results leaderboard" id="leaderboardSection" hidden>
+          <div class="section-title">
+            <div>
+              <h2>Model leaderboard</h2>
+              <p id="leaderboardMeta">Quality &amp; cost per model. Higher BLEU / ChrF++ / COMET is better.</p>
+            </div>
+          </div>
+          <details class="metric-info">
+            <summary>What do these metrics measure?</summary>
+            <ul>
+              <li><b>BLEU / SacreBLEU</b> — n-gram precision overlap between the translation and the reference (0–100). SacreBLEU is the standardized, reproducible implementation, so scores are comparable across runs and papers.</li>
+              <li><b>ChrF++</b> — character n-gram F-score plus word bigrams. It rewards partial-word matches and is more robust than BLEU on short sentences and morphologically rich languages (0–100).</li>
+              <li><b>COMET</b> — a neural metric (XLM-R based) trained on human ratings. It judges meaning/adequacy from source + hypothesis + reference (~0–1) and correlates best with human judgement, but is heavier to run.</li>
+              <li><b>Tok/s</b> — decoding throughput: completion tokens ÷ latency. <b>VRAM</b> (GPU mode) or <b>RAM</b> (CPU mode) shows the memory the run used.</li>
+            </ul>
+          </details>
+          <div id="leaderboard"></div>
         </section>
 
         <section class="results">
@@ -403,17 +469,18 @@ TRANSLATION_LAB_HTML = r"""<!doctype html>
   </main>
 
   <script>
+    // `ref` is the gold Indonesian translation used to score BLEU / ChrF++ / COMET.
     const LANGUAGES = [
-      { name: 'English', iso: 'en', flores: 'eng_Latn', sample: 'The weather is beautiful today.' },
-      { name: 'Mandarin Chinese', iso: 'zh', flores: 'zho_Hans', sample: '今天的天气很好，我们去市场吧。' },
-      { name: 'Hindi', iso: 'hi', flores: 'hin_Deva', sample: 'मुझे हर सुबह गरम चाय पीना पसंद है।' },
-      { name: 'Spanish', iso: 'es', flores: 'spa_Latn', sample: 'Me gusta mucho la comida picante.' },
-      { name: 'French', iso: 'fr', flores: 'fra_Latn', sample: 'Le chat dort sur le canapé.' },
-      { name: 'Arabic', iso: 'ar', flores: 'arb_Arab', sample: 'الكتاب الجديد على الطاولة في الغرفة.' },
-      { name: 'Bengali', iso: 'bn', flores: 'ben_Beng', sample: 'আজ বিকেলে আমরা নদীর ধারে হাঁটব।' },
-      { name: 'Russian', iso: 'ru', flores: 'rus_Cyrl', sample: 'Я изучаю программирование уже два года.' },
-      { name: 'Portuguese', iso: 'pt', flores: 'por_Latn', sample: 'A reunião começa depois do almoço.' },
-      { name: 'Urdu', iso: 'ur', flores: 'urd_Arab', sample: 'یہ شہر رات کے وقت بہت خوبصورت لگتا ہے۔' }
+      { name: 'English', iso: 'en', flores: 'eng_Latn', sample: 'The weather is beautiful today.', ref: 'Cuaca hari ini indah.' },
+      { name: 'Mandarin Chinese', iso: 'zh', flores: 'zho_Hans', sample: '今天的天气很好，我们去市场吧。', ref: 'Cuaca hari ini sangat bagus, ayo kita pergi ke pasar.' },
+      { name: 'Hindi', iso: 'hi', flores: 'hin_Deva', sample: 'मुझे हर सुबह गरम चाय पीना पसंद है।', ref: 'Saya suka minum teh panas setiap pagi.' },
+      { name: 'Spanish', iso: 'es', flores: 'spa_Latn', sample: 'Me gusta mucho la comida picante.', ref: 'Saya sangat suka makanan pedas.' },
+      { name: 'French', iso: 'fr', flores: 'fra_Latn', sample: 'Le chat dort sur le canapé.', ref: 'Kucing itu tidur di sofa.' },
+      { name: 'Arabic', iso: 'ar', flores: 'arb_Arab', sample: 'الكتاب الجديد على الطاولة في الغرفة.', ref: 'Buku baru itu ada di atas meja di dalam kamar.' },
+      { name: 'Bengali', iso: 'bn', flores: 'ben_Beng', sample: 'আজ বিকেলে আমরা নদীর ধারে হাঁটব।', ref: 'Sore ini kami akan berjalan di tepi sungai.' },
+      { name: 'Russian', iso: 'ru', flores: 'rus_Cyrl', sample: 'Я изучаю программирование уже два года.', ref: 'Saya sudah belajar pemrograman selama dua tahun.' },
+      { name: 'Portuguese', iso: 'pt', flores: 'por_Latn', sample: 'A reunião começa depois do almoço.', ref: 'Rapat dimulai setelah makan siang.' },
+      { name: 'Urdu', iso: 'ur', flores: 'urd_Arab', sample: 'یہ شہر رات کے وقت بہت خوبصورت لگتا ہے۔', ref: 'Kota ini terlihat sangat indah di malam hari.' }
     ];
 
     const els = {
@@ -428,9 +495,15 @@ TRANSLATION_LAB_HTML = r"""<!doctype html>
       results: document.getElementById('results'),
       resultMeta: document.getElementById('resultMeta'),
       metricLoaded: document.getElementById('metricLoaded'),
+      metricMode: document.getElementById('metricMode'),
       metricVram: document.getElementById('metricVram'),
       metricRam: document.getElementById('metricRam'),
-      metricTime: document.getElementById('metricTime')
+      metricTps: document.getElementById('metricTps'),
+      metricTime: document.getElementById('metricTime'),
+      cometToggle: document.getElementById('cometToggle'),
+      leaderboardSection: document.getElementById('leaderboardSection'),
+      leaderboard: document.getElementById('leaderboard'),
+      leaderboardMeta: document.getElementById('leaderboardMeta')
     };
 
     let models = [];
@@ -515,8 +588,13 @@ TRANSLATION_LAB_HTML = r"""<!doctype html>
     function updateStats(status, seconds = 0) {
       const vram = status?.vram || {};
       const ram = status?.ram || {};
+      // GPU mode is detected from VRAM stats (empty {} when running on CPU).
+      const onGpu = vram.used_mib !== undefined;
       els.metricLoaded.textContent = status?.loaded_model || 'none';
-      els.metricVram.textContent = vram.used_mib !== undefined ? fmtMiB(vram.used_mib) : 'CPU';
+      els.metricMode.textContent = onGpu
+        ? `GPU · ${vram.device || status?.device || 'cuda'}`
+        : `CPU · ${status?.device || 'cpu'}`;
+      els.metricVram.textContent = onGpu ? fmtMiB(vram.used_mib) : 'n/a (CPU)';
       els.metricRam.textContent = ram.used_mib !== undefined ? fmtMiB(ram.used_mib) : 'n/a';
       els.metricTime.textContent = `${seconds.toFixed(1)}s`;
       els.loadedState.textContent = `Loaded model: ${status?.loaded_model || 'none'}`;
@@ -540,6 +618,7 @@ TRANSLATION_LAB_HTML = r"""<!doctype html>
     function renderResults(rows, startedAt, endedStatus) {
       const seconds = (performance.now() - startedAt) / 1000;
       updateStats(endedStatus, seconds);
+      els.metricTps.textContent = fmtTps(avg(rows.map(r => r.tps)));
       els.results.className = 'result-grid';
       els.resultMeta.textContent = `${rows.length} translations complete across ${new Set(rows.map(r => r.model)).size} model session(s).`;
       els.results.innerHTML = rows.map((row, i) => `
@@ -551,10 +630,40 @@ TRANSLATION_LAB_HTML = r"""<!doctype html>
           <div>
             <div class="source">${escapeHtml(row.source)}</div>
             <div class="translation ${row.error ? 'bad' : 'ok'}">${escapeHtml(row.translation || row.error)}</div>
+            ${row.ref ? `<div class="ref-line"><b>ref:</b> ${escapeHtml(row.ref)}</div>` : ''}
           </div>
-          <div><small>${row.ms} ms</small><small>${row.tokens} tokens</small></div>
+          <div>
+            <small>${row.ms} ms</small><small>${row.tokens} tokens</small><small>${fmtTps(row.tps)}</small>
+            ${badgesHtml(row.scores)}
+          </div>
         </article>
       `).join('');
+    }
+
+    function avg(values) {
+      const v = values.filter(x => x !== null && x !== undefined && isFinite(x));
+      return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+    }
+
+    function fmtTps(value) {
+      return (value === null || value === undefined || !isFinite(value)) ? '— tok/s' : `${value.toFixed(1)} tok/s`;
+    }
+
+    function fmtScore(value) {
+      return (value === undefined || value === null) ? '—' : Number(value).toFixed(2);
+    }
+
+    // Per-row metric chips. `scores` = { bleu, chrf, comet? } once /metrics/score returns.
+    function badgesHtml(scores) {
+      if (!scores) return '';
+      const chips = [
+        `<span class="badge"><i>bleu</i><b>${fmtScore(scores.bleu)}</b></span>`,
+        `<span class="badge"><i>chrf++</i><b>${fmtScore(scores.chrf)}</b></span>`
+      ];
+      if (scores.comet !== undefined) {
+        chips.push(`<span class="badge"><i>comet</i><b>${fmtScore(scores.comet)}</b></span>`);
+      }
+      return `<div class="score-badges">${chips.join('')}</div>`;
     }
 
     async function refresh() {
@@ -585,14 +694,21 @@ TRANSLATION_LAB_HTML = r"""<!doctype html>
           body: JSON.stringify(requestFor(model, lang))
         });
         const usage = body.usage || {};
+        const ms = Math.round(performance.now() - t0);
+        const completion = usage.completion_tokens ?? 0;
+        // Throughput = decoded tokens / wall-clock seconds (network + decode).
+        const tps = ms > 0 && completion ? completion / (ms / 1000) : null;
         return {
           model,
           family: familyOf(model),
           language: lang.name,
           source: lang.sample,
+          ref: lang.ref,
           translation: body.choices?.[0]?.message?.content || '',
           tokens: usage.total_tokens ?? 'n/a',
-          ms: Math.round(performance.now() - t0)
+          completion,
+          tps,
+          ms
         };
       } catch (error) {
         return {
@@ -600,30 +716,122 @@ TRANSLATION_LAB_HTML = r"""<!doctype html>
           family: familyOf(model),
           language: lang.name,
           source: lang.sample,
+          ref: lang.ref,
           error: error.message,
           tokens: 'n/a',
+          tps: null,
           ms: Math.round(performance.now() - t0)
         };
       }
+    }
+
+    // Score one model's translations and build its leaderboard row. BLEU/ChrF++
+    // are always computed; COMET only when toggled (and installed server-side).
+    async function scoreModel(model, modelRows, wantComet) {
+      const ok = modelRows.filter(r => !r.error && r.translation && r.ref);
+      const entry = {
+        model,
+        family: familyOf(model),
+        avgMs: Math.round(modelRows.reduce((a, r) => a + (r.ms || 0), 0) / modelRows.length),
+        avgTps: avg(modelRows.map(r => r.tps)),
+        tokens: modelRows.reduce((a, r) => a + (Number(r.tokens) || 0), 0),
+        scored: ok.length,
+        total: modelRows.length,
+        system: {},
+        available: null,
+        cometModel: null,
+        error: null
+      };
+      if (!ok.length) { entry.error = 'no scorable rows'; return entry; }
+      try {
+        const res = await api('/metrics/score', {
+          method: 'POST',
+          body: JSON.stringify({
+            model,
+            comet: wantComet,
+            segments: ok.map(r => ({ src: r.source, mt: r.translation, ref: r.ref }))
+          })
+        });
+        entry.available = res.available;
+        entry.system = res.system || {};
+        entry.cometModel = res.comet_model;
+        entry.errors = res.errors || {};
+        ok.forEach((r, i) => { r.scores = res.segments[i] || {}; });
+      } catch (error) {
+        entry.error = error.message;
+      }
+      return entry;
+    }
+
+    function renderLeaderboard(board) {
+      if (!board.length) { els.leaderboardSection.hidden = true; return; }
+      els.leaderboardSection.hidden = false;
+      const hasComet = board.some(e => e.system && e.system.comet !== undefined);
+      const best = {};
+      ['bleu', 'chrf', 'comet'].forEach(k => {
+        const vals = board.map(e => e.system?.[k]).filter(v => v !== undefined && v !== null);
+        if (vals.length) best[k] = Math.max(...vals);
+      });
+      const cell = (v, k) => {
+        const isBest = v !== undefined && v !== null && best[k] !== undefined && v === best[k];
+        return `<td class="num${isBest ? ' best' : ''}">${fmtScore(v)}</td>`;
+      };
+      const head = `<tr><th>Model</th><th>BLEU</th><th>ChrF++</th>${hasComet ? '<th>COMET</th>' : ''}<th>Tok/s</th><th>Avg ms</th><th>Tokens</th></tr>`;
+      const body = board.map(e => `
+        <tr>
+          <td>${escapeHtml(e.model)}<br><small style="color:var(--soft);font-weight:400">${escapeHtml(e.family)} · ${e.scored}/${e.total} scored</small></td>
+          ${cell(e.system?.bleu, 'bleu')}
+          ${cell(e.system?.chrf, 'chrf')}
+          ${hasComet ? cell(e.system?.comet, 'comet') : ''}
+          <td class="num">${e.avgTps != null ? e.avgTps.toFixed(1) : '—'}</td>
+          <td class="num">${e.avgMs}</td>
+          <td class="num">${e.tokens}</td>
+        </tr>
+      `).join('');
+      els.leaderboard.innerHTML = `<table class="lb-table"><thead>${head}</thead><tbody>${body}</tbody></table>${leaderboardNotes(board)}`;
+      els.leaderboardMeta.textContent = `${board.length} model(s) · BLEU & ChrF++ are 0–100, COMET ~0–1. Higher is better.`;
+    }
+
+    function leaderboardNotes(board) {
+      const notes = [];
+      const cometAvail = board.some(e => e.available && e.available.comet);
+      if (els.cometToggle.checked && !cometAvail) {
+        notes.push(`<div class="lb-note warn">COMET unavailable on the server — install it with <code>pip install -r requirements-metrics.txt</code>.</div>`);
+      }
+      const cometModel = board.map(e => e.cometModel).find(Boolean);
+      if (cometModel) notes.push(`<div class="lb-note">COMET model: <code>${escapeHtml(cometModel)}</code></div>`);
+      const errs = board.filter(e => e.error).map(e => `${e.model}: ${e.error}`);
+      if (errs.length) notes.push(`<div class="lb-note warn">${escapeHtml(errs.join(' · '))}</div>`);
+      return notes.join('');
     }
 
     async function run(modelsToRun) {
       setBusy(true, 'Running translation session');
       showLoading(modelsToRun.length * LANGUAGES.length > 10 ? 8 : 4);
       const startedAt = performance.now();
+      const wantComet = els.cometToggle.checked;
       const rows = [];
+      const board = [];
+      els.leaderboardSection.hidden = true;
       try {
         for (const model of modelsToRun) {
           await switchModel(model);
-          const languageSet = modelsToRun.length === 1 ? LANGUAGES : LANGUAGES;
-          for (const lang of languageSet) {
+          const modelRows = [];
+          for (const lang of LANGUAGES) {
             els.liveState.textContent = `${model}: ${lang.name} to Indonesian`;
-            rows.push(await translateOne(model, lang));
+            const row = await translateOne(model, lang);
+            rows.push(row);
+            modelRows.push(row);
             renderResults(rows, startedAt, await api('/admin/status'));
           }
+          els.liveState.textContent = `${model}: scoring ${wantComet ? '(BLEU, ChrF++, COMET)' : '(BLEU, ChrF++)'}`;
+          board.push(await scoreModel(model, modelRows, wantComet));
+          renderResults(rows, startedAt, await api('/admin/status'));
+          renderLeaderboard(board);
         }
         const endedStatus = await api('/admin/status');
         renderResults(rows, startedAt, endedStatus);
+        renderLeaderboard(board);
         els.liveState.textContent = 'Session complete';
       } catch (error) {
         showError(error);

@@ -52,14 +52,31 @@ pytest tests/ -v -s
   deltas and terminates with `[DONE]`. Because a stream returns HTTP `200` before
   generation starts, a "model not loadable" error arrives as an in-band
   `data: {"error": ...}` event — the test detects this and skips.
+- after a successful generation the test prints **decoding throughput** (tok/s)
+  and a **device-aware memory** line — GPU VRAM when CUDA is present, otherwise
+  system RAM + process RSS. Use `-s` to see them.
+
+**Metrics** (`test_metrics_score`):
+- scores one segment via `POST /metrics/score` and checks BLEU/SacreBLEU + ChrF++
+- prints **what each metric measures** before the scores (use `-s` to read them)
+- needs the optional extras (`pip install -r requirements-metrics.txt`); without
+  them the endpoint still returns `200` and the test **skips** rather than fails.
+  COMET is left off here to keep the run light — exercise it from the Translation
+  Lab on Colab. Smoke-test the endpoint by hand:
+
+```bash
+curl -s localhost:8000/metrics/score -H 'Content-Type: application/json' \
+  -d '{"segments":[{"src":"Le chat dort.","mt":"Kucing tidur.","ref":"Kucing itu tidur."}]}'
+```
 
 **Translation** (`test_translate_random_to_indonesian`, translation models only):
 - picks a random source language (en/fr/es/de/ja) and translates a sample
   sentence **into Indonesian** using `source_lang`/`target_lang`
 - skips with `CT2_TEST_MODEL` set to a non-translation model
-- it's **verbose**: it prints the source text, request, status, the translation
-  and token usage, and the **full error body** on failure (pytest truncates skip
-  reasons, so this is the way to see why a model won't load). Use `-s` to view:
+- it's **verbose**: it prints the source text, request, status, the translation,
+  token usage, **throughput (tok/s)** and **GPU/CPU memory usage**, and the
+  **full error body** on failure (pytest truncates skip reasons, so this is the
+  way to see why a model won't load). Use `-s` to view:
 
 ```bash
 CT2_TEST_MODEL=translategemma-4b-it pytest \

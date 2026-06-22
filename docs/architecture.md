@@ -55,8 +55,27 @@ unchanged. `frequency_penalty` is mapped onto CTranslate2's `repetition_penalty`
 
 ### `server.py` — FastAPI
 OpenAI-compatible endpoints plus an `/admin` surface for online model switching,
-VRAM inspection, and on-demand conversion. On startup it loads the default model
+VRAM inspection, and on-demand conversion, and a `POST /metrics/score` endpoint
+for translation-quality scoring. On startup it loads the default model
 (non-fatal if unavailable); on shutdown it unloads.
+
+### `metrics.py` — translation-quality metrics
+Scores `{src, mt, ref}` segments with **BLEU/SacreBLEU**, **ChrF++** (sacrebleu's
+chrF with `word_order=2`) and **COMET** (`unbabel-comet`). The metric libraries
+are **optional extras** (`requirements-metrics.txt`) and nothing is imported at
+module load, so the server boots without them — `available()` reports which
+backends are present and `score()` degrades gracefully (lexical metrics work as
+soon as `sacrebleu` is installed; missing backends are flagged, not fatal). COMET
+is a heavy neural model loaded lazily as a cached singleton, on **CPU by default**
+(`CT2_COMET_DEVICE`) so it never contends for VRAM with the loaded model;
+`CT2_COMET_MODEL` selects the checkpoint.
+
+### `web.py` — Translation Lab + leaderboard
+A self-contained, dependency-free HTML/JS page served at `/translation-lab`. It
+translates ten source languages into Indonesian across every supported model,
+then scores and ranks them (BLEU/ChrF++/COMET) in a leaderboard, and reports
+per-model **throughput (tok/s)** and **device-aware memory** (GPU VRAM or CPU
+RAM). It only calls existing API endpoints — no server-side templating.
 
 ## Design choices
 
